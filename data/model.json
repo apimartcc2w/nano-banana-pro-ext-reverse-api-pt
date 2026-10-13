@@ -1,0 +1,19 @@
+{
+  "id": "gemini-3-pro-image-preview",
+  "source": "https://apimart.ai/en/pricing",
+  "extracted_at": "2026-10-13T06:43:00Z",
+  "prices": {
+    "default": {
+      "list": 0.0375,
+      "effective": 0.03
+    },
+    "4K": {
+      "list": 0.05,
+      "effective": 0.04
+    }
+  },
+  "rates": {},
+  "unit": "usd_per_image",
+  "hook": "from $0.03 per image (4K $0.04)",
+  "model_page": "https://apimart.ai/model/nano-banana-3-api"
+}

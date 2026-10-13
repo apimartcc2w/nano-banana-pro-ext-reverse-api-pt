@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/01-product-hero-perfume.jpg" width="820" alt="Nano Banana Pro (gemini-3-pro-image-preview) output generated through APIMart">
+  <img src="assets/01-product-hero-perfume.jpg" width="820" alt="Sample render via the APIMart image API">
 </p>
 
 > **from $0.03 per image** (4K $0.04) — one OpenAI-compatible endpoint at `https://api.apimart.ai/v1`, no monthly plan required. *(observed 2026-10-12)*
@@ -17,52 +17,109 @@
 **Why teams call Nano Banana Pro (`gemini-3-pro-image-preview`) through APIMart**
 
 - **One key, entire catalog.** The same `https://api.apimart.ai/v1` base URL and `Authorization` header reach Nano Banana Pro (`gemini-3-pro-image-preview`) and 300+ other image, video and language models — switch the `model` field, not your client.
-- **$1 minimum, pay as you go.** No subscription and no prepaid plan to size up front: top up from $1 and spend it on calls. There is no free quota to burn through first, so the price in this table is the price you pay.
-- **The charge comes back in the response.** Every completed task reports the amount billed (`cost` / `credits_cost`), so a spend number is read per call instead of guessed at month end.
+- **$1 minimum, pay as you go.** No subscription and no prepaid plan to size up front: top up from $1 and spend it on calls.
+- **The charge comes back in the response.** Every completed task reports the amount billed (`cost` / `credits_cost`); a task marked `failed` is refunded.
 - **Async by design.** Submit, take the `task_id`, poll `GET /v1/tasks/{id}` — batching and retries are ordinary queue work, not a bespoke integration.
 
 <!-- /conv-kit:v1 -->
 
-## Pricing (snapshot 2026-09-28)
+Nano Banana Pro is Google's Gemini 3 Pro Image for 4K image generation and editing with multi-step planning.
 
-| Tier | Price |
-| --- | --- |
-| `1K` | $0.03 |
-| `4K` | $0.04 |
+## Model id and routes
 
-Prices are per delivered image; `n` in the request multiplies the total. Snapshot date **2026-09-28** — the live pricing page is authoritative.
+| Route | `model` value | Billing | Notes |
+| --- | --- | --- | --- |
+| Per-image | `gemini-3-pro-image-preview` | per delivered image, by resolution | see the [model page](https://go.apimart.ai/k-1e7041) for the exact tiers |
+
+Endpoint: `POST https://api.apimart.ai/v1/images/generations` (OpenAI-compatible), then poll `GET /v1/tasks/{task_id}`.
+
+## Pricing
+
+<!-- pricing:model:start -->
+| Output | List price | Effective price |
+| --- | --- | --- |
+| default | 0.0375 | 0.03 |
+| 4K | 0.05 | 0.04 |
+
+
+<!-- pricing:model:end -->
+
+Prices are a snapshot; the [pricing page](https://go.apimart.ai/k-b5b44c) and [`data/model.json`](data/model.json) are refreshed by CI, and a completed task reports the exact amount in its `cost` field.
+
+## Request parameters
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `model` | string | required | the model id shown in the route table above |
+| `prompt` | string | required | what to generate, or what to change when editing |
+| `size` | string | `auto` / `1:1` | aspect ratio, or `auto` where the route supports it |
+| `resolution` | string | `1K` | output resolution tier — cost scales with it |
+| `n` | integer | `1` | number of images per task, where the route allows more than one |
+| `image_urls` | string[] | — | reference images as public HTTP(S) URLs or base64 data URLs |
+| `nsfw_check` | boolean | `false` | runs `omni-moderation-latest` before submitting |
+
+The table lists the fields accepted by the APIMart OpenAI-compatible image endpoint. Check the [model page](https://go.apimart.ai/k-1e7041) for anything this model adds on top.
 
 ## Quickstart
 
 ```bash
-curl -X POST https://api.apimart.ai/v1/images/generations \
-  -H 'Authorization: Bearer $APIMART_KEY' \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"gemini-3-pro-image-preview","prompt":"cozy reading nook, warm lamp, cinematic","size":"1:1","resolution":"1K","n":1}'
+curl --request POST --url https://api.apimart.ai/v1/images/generations \
+  --header "Authorization: Bearer $APIMART_API_KEY" --header 'Content-Type: application/json' \
+  -d '{"model":"gemini-3-pro-image-preview","prompt":"A bamboo forest at sunrise, slow push-in","size":"1:1","resolution":"1K"}'
 ```
 
-Async: submit → get `task_id` → poll `GET https://api.apimart.ai/v1/tasks/<task_id>` → read `cost` / `credits_cost` from the result. Parameter tables, `version`/`resolution`/`size` options and idempotency headers are documented on the model page reachable from the pricing link above.
+```python
+import os, time, requests
 
-## Reverse vs official route
+BASE = "https://api.apimart.ai/v1"
+HEADERS = {"Authorization": f"Bearer {os.environ['APIMART_API_KEY']}", "Content-Type": "application/json"}
 
-| Route | Callable ID | Price |
+created = requests.post(f"{BASE}/images/generations", headers=HEADERS, timeout=60, json={
+    "model": "gemini-3-pro-image-preview", "prompt": "A bamboo forest at sunrise, slow push-in",
+}).json()
+task_id = created["data"]["id"]
+
+while True:
+    task = requests.get(f"{BASE}/tasks/{task_id}", headers=HEADERS, timeout=60).json()["data"]
+    if task["status"] in ("completed", "failed"):
+        break
+    time.sleep(5)
+print(task.get("cost"), task["result"]["images"][0]["url"])
+```
+
+Runnable versions: [`examples/`](examples). The task lifecycle is `pending → processing → completed | failed`.
+
+## FAQ
+
+**What is the Nano Banana Pro model id?**
+
+`gemini-3-pro-image-preview`. See the route table above.
+
+**How is it billed?**
+
+**from $0.03 per image** (4K $0.04). The completed task reports the exact amount in its `cost` field; a failed task is refunded.
+
+**How do I get a key?**
+
+Use the [Get an API key](https://go.apimart.ai/k-f9074c) link — $1 minimum top-up, no plan required.
+
+## Attributed links (how this repository is measured)
+
+| Purpose | Attributed link | Target |
 | --- | --- | --- |
-| **engenharia reversa** | `gemini-3-pro-image-preview` | 1K $0.03; 4K $0.04 |
-| roteamento oficial | `nano-banana-pro (gemini-3-pro-image-preview-official)` | official list price, billed at ×0.8 group ratio |
+| Model page | <https://go.apimart.ai/k-1e7041> | `apimart.ai/pt/model/nano-banana-3-api` |
+| Live pricing | <https://go.apimart.ai/k-b5b44c> | `apimart.ai/pt/pricing` |
+| Get an API key | <https://go.apimart.ai/k-f9074c> | `apimart.ai/pt/keys` |
 
-
-## Keywords
-
-`nano-banana-pro-ext` · `gemini-3-pro-image-preview` · `engenharia reversa` · `reverse-engineered` · `gateway de API` · `relay de API` · `nano banana 2 api` · `gpt-image-2.5 api` · `ai api pricing` · `pay-as-you-go`
-
-## Platform facts
-
-- USD settlement, pay-as-you-go, **$1 minimum top-up**, no subscription.
-- Operating since last year; ~100,000 registered users, mostly enterprise accounts.
-- International invoices available on request.
-- 307 models online (live `/v1/models`) as of 2026-09-28.
+Outbound APIMart links are minted through the promo link API; hand-made tracking parameters are rejected by
+`tools/check_links.py` in CI.
 
 ## Disclosure
 
-This repository documents **APIMart**, a third-party API aggregator/gateway. It is **not affiliated with, endorsed by, or sponsored by** OpenAI, Google, Anthropic, xAI, ByteDance or any model vendor. Model names and trademarks belong to their owners. Prices are a point-in-time snapshot and may change; the vendor's console billing is authoritative.
+Nano Banana Pro is a third-party model served through APIMart; this repository documents how to call it and publishes
+model ids and prices, and does not claim official status. Model names, prices and documentation belong to their
+respective owners.
 
+## License
+
+MIT — see [LICENSE](LICENSE).
